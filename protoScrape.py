@@ -44,6 +44,10 @@ def save_to_files(content, filename, extension):
 def extract_links(html_content, base_url):
     soup = BeautifulSoup(html_content, 'html.parser')
     links = [urljoin(base_url, a['href']) for a in soup.find_all('a', href=True)]
+
+    # Filter out links that don't start with "http" or "https"
+    links = [link for link in links if link.startswith('http') or link.startswith('https')]
+
     return links
 
 
@@ -56,6 +60,38 @@ def run(url, base_filename):
 
     while all_links:
         link = all_links.pop(0)
+
+        # Send an HTTP GET request to the URL
+        response = requests.get(link)
+
+        if response.status_code == 400:
+            print(print(f"Failed to retrieve the webpage. Status code: 400 ({link})"))
+            continue  # Skip to the next line
+
+        if response.status_code == 401:
+            print(print(f"Failed to retrieve the webpage. Status code: 401 ({link})"))
+            continue  # Skip to the next line
+
+        if response.status_code == 403:
+            print(print(f"Failed to retrieve the webpage. Status code: 403 ({link})"))
+            continue  # Skip to the next link
+
+        if response.status_code == 404:
+            print(print(f"Failed to retrieve the webpage. Status code: 404 ({link})"))
+            continue  # Skip to the next link
+
+        if response.status_code == 500:
+            print(print(f"Failed to retrieve the webpage. Status code: 500 ({link})"))
+            continue  # Skip to the next line
+
+        if response.status_code == 504:
+            print(print(f"Gateway Timeout. Status code: 504 ({link})"))
+            continue  # Skip to the next line
+
+        if response.status_code == 429:
+            print(print(f"Too many requests. Status code: 429 ({link})"))
+            continue
+
         parsed_url = urlparse(link)
         domain_path = parsed_url.netloc + parsed_url.path
         filename = os.path.join(base_filename, domain_path)
@@ -65,9 +101,11 @@ def run(url, base_filename):
 
         html_content, css_content, page_links = extract_html_and_css(link)
 
-        # Save the page
-        save_to_files(html_content, filename, 'html')
-        save_to_files(css_content, filename, 'css')
+        # If html_content is None, it means the page is not available (404)
+        if html_content is not None:
+            # Save the page
+            save_to_files(html_content, filename, 'html')
+            save_to_files(css_content, filename, 'css')
 
         visited_links.add(link)  # Mark the current link as visited
 
