@@ -3,7 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import hashlib
 from collections import deque
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlsplit
 
 
 def fetch_and_save_page(url, base_dir, queue, visited):
@@ -23,60 +23,66 @@ def fetch_and_save_page(url, base_dir, queue, visited):
         page_dir = os.path.join(base_dir, clean_title)
         os.makedirs(page_dir, exist_ok=True)
 
-        # Save the HTML content
-        html_path = os.path.join(page_dir, 'content.html')
-        with open(html_path, 'w', encoding='utf-8') as file:
-            file.write(content)
+        # Function to save content and adjust links
+        def save_resource(resource_url, folder, prefix, extension):
+            resource_url = urljoin(url, resource_url)
+            resource_data = requests.get(resource_url).content
+            resource_name = f"{prefix}_{hashlib.md5(resource_url.encode()).hexdigest()}.{extension}"
+            resource_path = os.path.join(folder, resource_name)
+            with open(resource_path, 'wb') as resource_file:
+                resource_file.write(resource_data)
+            return resource_name
 
-        # Save other relevant data (e.g., images, text)
-        images = soup.find_all('img')
-        for i, img in enumerate(images):
+        # Update image sources
+        for img in soup.find_all('img'):
             img_url = img.get('src')
             if img_url:
                 try:
-                    img_data = requests.get(urljoin(url, img_url)).content
-                    img_name = os.path.join(page_dir, f'image_{i}.jpg')
-                    with open(img_name, 'wb') as img_file:
-                        img_file.write(img_data)
+                    img_name = save_resource(img_url, page_dir, 'image', 'jpg')
+                    img['src'] = img_name
                 except Exception as e:
-                    print(f"Could not save image {img_url}: {e}")
+                    print(f"could not save image {img_url}: {e}")
 
-        # Save CSS files
-        css_links = soup.find_all('link', rel='stylesheet')
-        for i, link in enumerate(css_links):
+        # Update CSS links
+        for link in soup.find_all('link', rel='stylesheet'):
             css_url = link.get('href')
             if css_url:
                 try:
-                    css_data = requests.get(urljoin(url, css_url)).text
-                    css_name = os.path.join(page_dir, f'style_{i}.css')
-                    with open(css_name, 'w', encoding='utf-8') as css_file:
-                        css_file.write(css_data)
+                    css_name = save_resource(css_url, page_dir, 'style', 'css')
+                    link['href'] = css_name
                 except Exception as e:
-                    print(f'Could not save CSS {css_url}: {e}')
+                    print(f"Could not save CSS {css_url}: {e}")
 
-        # Find all links on the page and add to the queue if not already visited
-        links = soup.find_all('a', href=True)
-        for link in links:
-            link_url = urljoin(url, link['href'])
+        # Update Links
+        for a in soup.find_all('a', href=True):
+            link_url = urljoin(url, a['href'])
             if link_url not in visited and is_valid_url(link_url):
                 queue.append(link_url)
                 visited.add(link_url)
+            # Update href to local path if within same domain
+            if urlsplit(link_url).netloc == urlsplit(url).netloc:
+                a['href'] = os.path.join('..', clean_title, hashlib.md5(link_url.encode()).hexdigest() + '.html')
 
-        print(f"Page '{clean_title}' saved successfully.")
+        # Save the HTML content
+        html_path = os.path.join(page_dir, 'content.html')
+        with open(html_path, 'w', encoding='utf-8') as file:
+            file.write(str(soup))
+
+        print(f"Page '{clean_title} saved successfully")
 
     except Exception as e:
         print(f"Failed to fetch page {url}: {e}")
 
 
 def is_valid_url(url):
-    """Check if the URL is valid and belongs to the same domain."""
+    """Check if URL is valid and belongs to same domain."""
     parsed = urlparse(url)
     return parsed.scheme in ('http', 'https') and parsed.netloc != ''
 
 
 def main():
-    # Prompt the user for initial URLs to scrape
-    initial_urls = input("Enter the initial URLs to scrape, separated by commas: ").split(',')
+    # Prompt user for initial URLs to scrape
+    initial_urls = input("Enter the initial URLs to scrape, separated by commas: ")
 
     # Strip any surrounding whitespace from each URL
     initial_urls = [url.strip() for url in initial_urls if url.strip()]
@@ -85,15 +91,15 @@ def main():
         print("No valid URLs provided. Exiting.")
         return
 
-    # Define the base directory to store the pages
+    # Define base directory to store pages
     base_dir = 'scraped_pages'
     os.makedirs(base_dir, exist_ok=True)
 
-    # Create a queue for URLs to scrape and a set for visited URLs
+    # Create a que for URLs to scrape and a set for visited URLs
     queue = deque(initial_urls)
     visited = set(initial_urls)
 
-    # Fetch and save each page from the queue
+    # Fetch and save each page from queue
     while queue:
         url = queue.popleft()
         fetch_and_save_page(url, base_dir, queue, visited)
