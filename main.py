@@ -38,7 +38,11 @@ def fetch_and_save_page(url, base_dir, queue, visited):
             img_url = img.get('src')
             if img_url:
                 try:
-                    img_name = save_resource(img_url, page_dir, 'image', 'jpg')
+                    # Determine image extension
+                    extension = 'jpg'
+                    if img_url.endswith('.gif'):
+                        extension = '.gif'
+                    img_name = save_resource(img_url, page_dir, 'image', extension)
                     img['src'] = img_name
                 except Exception as e:
                     print(f"could not save image {img_url}: {e}")
