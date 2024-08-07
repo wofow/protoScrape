@@ -63,6 +63,17 @@ def fetch_and_save_page(url, base_dir, queue, visited):
                 except Exception as e:
                     print(f"Could not save JS {js_url}: {e}")
 
+        # Update video sources
+        for video in soup.find_all('video'):
+            for source in video.find_all('source'):
+                video_url = source.get('src')
+                if video_url:
+                    try:
+                        video_name = save_resource(video_url, page_dir, 'video', 'mp4')
+                        source['src'] = video_name
+                    except Exception as e:
+                        print(f"Could not save video {video_url}: {e}")
+
         # Update Links
         for a in soup.find_all('a', href=True):
             link_url = urljoin(url, a['href'])
