@@ -25,12 +25,12 @@ def fetch_and_save_page(url, base_dir, queue, visited):
         os.makedirs(page_dir, exist_ok=True)
 
         # Function to save content and adjust links
-        def save_resource(resource_url, folder, prefix, extension, retries=3):
+        def save_resource(resource_url, folder, prefix, file_extension, retries=3):
             resource_url = urljoin(url, resource_url)
             for attempt in range(retries):
                 try:
                     resource_data = requests.get(resource_url).content
-                    resource_name = f"{prefix}_{hashlib.md5(resource_url.encode()).hexdigest()}.{extension}"
+                    resource_name = f"{prefix}_{hashlib.md5(resource_url.encode()).hexdigest()}.{file_extension}"
                     resource_path = os.path.join(folder, resource_name)
                     with open(resource_path, 'wb') as resource_file:
                         resource_file.write(resource_data)
