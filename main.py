@@ -53,6 +53,16 @@ def fetch_and_save_page(url, base_dir, queue, visited):
                 except Exception as e:
                     print(f"Could not save CSS {css_url}: {e}")
 
+        # Update JS links
+        for script in soup.find_all('script', src=True):
+            js_url = script.get('src')
+            if js_url:
+                try:
+                    js_name = save_resource(js_url, page_dir, 'script', 'js')
+                    script['src'] = js_name
+                except Exception as e:
+                    print(f"Could not save JS {js_url}: {e}")
+
         # Update Links
         for a in soup.find_all('a', href=True):
             link_url = urljoin(url, a['href'])
@@ -82,7 +92,7 @@ def is_valid_url(url):
 
 def main():
     # Prompt user for initial URLs to scrape
-    initial_urls = input("Enter the initial URLs to scrape, separated by commas: ")
+    initial_urls = input("Enter the initial URLs to scrape, separated by commas: ").split(',')
 
     # Strip any surrounding whitespace from each URL
     initial_urls = [url.strip() for url in initial_urls if url.strip()]
@@ -92,7 +102,7 @@ def main():
         return
 
     # Define base directory to store pages
-    base_dir = 'scraped_pages'
+    base_dir = input("What would you like to name the main output folder? ")
     os.makedirs(base_dir, exist_ok=True)
 
     # Create a que for URLs to scrape and a set for visited URLs
