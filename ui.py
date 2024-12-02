@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 )
 from collections import deque
 from ops.fetch import PageFetcher
+from ops.scanner import PreScan  # Import PreScan class
 
 
 class ScraperUI(QMainWindow):
@@ -23,6 +24,11 @@ class ScraperUI(QMainWindow):
         self.layout.addWidget(self.url_label)
         self.layout.addWidget(self.url_input)
 
+        # Scan URLs button
+        self.scan_button = QPushButton("Scan URLs")
+        self.scan_button.clicked.connect(self.scan_urls)
+        self.layout.addWidget(self.scan_button)
+
         # Output directory selection
         self.dir_label = QLabel("Output Directory: Not Selected")
         self.dir_button = QPushButton("Select Output Directory")
@@ -30,10 +36,9 @@ class ScraperUI(QMainWindow):
         self.layout.addWidget(self.dir_label)
         self.layout.addWidget(self.dir_button)
 
-        # Scraping options
+        # Available scraping options dropdown
         self.option_label = QLabel("Scraping Options:")
         self.option_dropdown = QComboBox()
-        self.option_dropdown.addItems(["All", "Photos", "Videos", "Page Structs", "Photos and Videos"])
         self.layout.addWidget(self.option_label)
         self.layout.addWidget(self.option_dropdown)
 
@@ -52,6 +57,7 @@ class ScraperUI(QMainWindow):
 
         # Variables
         self.output_dir = None
+        self.scanned_data = {}  # Store the results of the pre-scan
 
     def select_directory(self):
         """Open a file dialog to select the output directory."""
@@ -60,8 +66,8 @@ class ScraperUI(QMainWindow):
             self.output_dir = directory
             self.dir_label.setText(f"Output Directory: {directory}")
 
-    def start_scraping(self):
-        """Start the scraping process."""
+    def scan_urls(self):
+        """Pre-scan the URLs to determine available scraping options."""
         urls = self.url_input.text().split(',')
         urls = [url.strip() for url in urls if url.strip()]
 
@@ -69,14 +75,37 @@ class ScraperUI(QMainWindow):
             QMessageBox.warning(self, "Input Error", "Please enter valid URLs.")
             return
 
+        self.log_area.append("Scanning URLs...")
+        try:
+            # Run the PreScan logic
+            pre_scan = PreScan(urls)
+            self.scanned_data = pre_scan.run_scan()
+
+            # Populate the dropdown menu with options
+            self.option_dropdown.clear()
+            for url, options in self.scanned_data.items():
+                self.option_dropdown.addItem(f"{url} - {', '.join(options)}")
+
+            self.log_area.append("URL scanning completed.")
+        except Exception as e:
+            self.log_area.append(f"Error during scan: {e}")
+            QMessageBox.critical(self, "Scan Error", f"An error occurred: {e}")
+
+    def start_scraping(self):
+        """Start the scraping process."""
+        selected_option = self.option_dropdown.currentText()
+        if not selected_option:
+            QMessageBox.warning(self, "Selection Error", "Please select a scraping option.")
+            return
+
+        urls = self.url_input.text().split(',')
+        urls = [url.strip() for url in urls if url.strip()]
+
         if not self.output_dir:
             QMessageBox.warning(self, "Directory Error", "Please select an output directory.")
             return
 
-        selected_option = self.option_dropdown.currentText()
-
-        # Initialize PageFetcher and start scraping
-        self.log_area.append("Starting scraping process...")
+        self.log_area.append(f"Starting scraping process for: {selected_option}")
         try:
             queue = deque(urls)
             visited = set(urls)
