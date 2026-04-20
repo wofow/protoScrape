@@ -21,11 +21,11 @@ class PreScan:
 
             options = []
             if has_photos:
-                options.append("Photos")
+                options.append("\nPhotos")
             if has_videos:
-                options.append("Videos")
+                options.append("\nVideos")
             if has_page_struct:
-                options.append("Page Structs")
+                options.append("\nPage Structs")
 
             return options
         except Exception as e:
