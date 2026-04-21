@@ -7,104 +7,129 @@ import time
 from ops.isValid import is_valid_url
 
 
+def _get_extension(url, default='bin'):
+    """Extract a file extension from a URL path, falling back to a default."""
+    path = urlsplit(url).path
+    _, ext = os.path.splitext(path)
+    return ext.lstrip('.') or default
+
+
 class PageFetcher:
-    def __init__(self, base_dir):
+    # scrape_mode: 'All', 'Photos', 'Videos', 'Page Structs', 'Photos and Videos'
+    def __init__(self, base_dir, scrape_mode='All', max_depth=2, progress_callback=None):
         self.base_dir = base_dir
+        self.scrape_mode = scrape_mode
+        self.max_depth = max_depth
+        self.progress_callback = progress_callback
+        self._stop_flag = False
         os.makedirs(base_dir, exist_ok=True)
 
-    def fetch_and_save_page(self, url, queue, visited):
+    def stop(self):
+        self._stop_flag = True
+
+    def _log(self, message):
+        if self.progress_callback:
+            self.progress_callback(message)
+        else:
+            print(message)
+
+    def fetch_and_save_page(self, url, queue, visited, depth=0):
         """Fetch a page and save its resources and HTML content locally."""
+        if self._stop_flag or depth > self.max_depth:
+            return
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=10)
             response.raise_for_status()
-            content = response.text
+            soup = BeautifulSoup(response.text, 'html.parser')
 
-            # Parse the HTML content
-            soup = BeautifulSoup(content, 'html.parser')
             title = soup.title.string if soup.title else hashlib.md5(url.encode()).hexdigest()
-
-            # Clean title to create a valid directory name
-            clean_title = ''.join(e for e in title if e.isalnum() or e in (' ', '_', '-')).strip()
+            clean_title = ''.join(e for e in title if e.isalnum() or e in (' ', '_', '-')).strip()[:80]
             page_dir = os.path.join(self.base_dir, clean_title)
             os.makedirs(page_dir, exist_ok=True)
 
-            # Save page resources (images, CSS, JS, videos)
-            self._save_resources(soup, page_dir, url)
+            if self.scrape_mode in ('All', 'Photos', 'Photos and Videos'):
+                self._save_images(soup, page_dir, url)
 
-            # Update links in the page
-            self._update_links(soup, url, queue, visited, clean_title)
+            if self.scrape_mode in ('All', 'Videos', 'Photos and Videos'):
+                self._save_videos(soup, page_dir, url)
 
-            # Save the modified HTML content
-            html_path = os.path.join(page_dir, 'content.html')
-            with open(html_path, 'w', encoding='utf-8') as file:
-                file.write(str(soup))
+            if self.scrape_mode in ('All', 'Page Structs'):
+                self._save_css_and_js(soup, page_dir, url)
 
-            print(f"Page '{clean_title}' saved successfully")
+            self._update_links(soup, url, queue, visited, clean_title, depth)
 
+            with open(os.path.join(page_dir, 'content.html'), 'w', encoding='utf-8') as f:
+                f.write(str(soup))
+
+            self._log(f"✔ Saved '{clean_title}'")
+
+        except requests.exceptions.Timeout:
+            self._log(f"✘ Timeout: {url}")
+        except requests.exceptions.HTTPError as e:
+            self._log(f"✘ HTTP {e.response.status_code}: {url}")
         except Exception as e:
-            print(f"Failed to fetch page {url}: {e}")
+            self._log(f"✘ Failed {url}: {e}")
 
-    def _save_resources(self, soup, page_dir, url):
-        """Save images, CSS, JS, and video resources from the page."""
-        def save_resource(resource_url, folder, prefix, file_extension, retries=3):
-            resource_url = urljoin(url, resource_url)
-            for attempt in range(retries):
-                try:
-                    resource_data = requests.get(resource_url).content
-                    resource_name = f"{prefix}_{hashlib.md5(resource_url.encode()).hexdigest()}.{file_extension}"
-                    resource_path = os.path.join(folder, resource_name)
-                    with open(resource_path, 'wb') as resource_file:
-                        resource_file.write(resource_data)
-                    return resource_name
-                except Exception as e:
-                    print(f"Attempt {attempt + 1} failed to save resource {resource_url}: {e}")
-                    if attempt < retries - 1:
-                        time.sleep(2)
-            print(f"Could not save resource {resource_url} after {retries} attempts")
-            return None
+    def _save_resource(self, resource_url, folder, prefix, file_extension, retries=3):
+        for attempt in range(retries):
+            try:
+                data = requests.get(resource_url, timeout=10).content
+                name = f"{prefix}_{hashlib.md5(resource_url.encode()).hexdigest()}.{file_extension}"
+                with open(os.path.join(folder, name), 'wb') as f:
+                    f.write(data)
+                return name
+            except Exception as e:
+                self._log(f"  ↳ Attempt {attempt + 1} failed for {resource_url}: {e}")
+                if attempt < retries - 1:
+                    time.sleep(1)
+        self._log(f"  ✘ Could not save {resource_url} after {retries} attempts")
+        return None
 
-        # Save images
+    def _save_images(self, soup, page_dir, base_url):
         for img in soup.find_all('img'):
-            img_url = img.get('src')
-            if img_url:
-                extension = 'jpg' if not img_url.endswith('.gif') else 'gif'
-                img_name = save_resource(img_url, page_dir, 'image', extension)
-                if img_name:
-                    img['src'] = img_name
+            src = img.get('src')
+            if src:
+                full_url = urljoin(base_url, src)
+                name = self._save_resource(full_url, page_dir, 'image', _get_extension(full_url, 'jpg'))
+                if name:
+                    img['src'] = name
 
-        # Save CSS files
-        for link in soup.find_all('link', rel='stylesheet'):
-            css_url = link.get('href')
-            if css_url:
-                css_name = save_resource(css_url, page_dir, 'style', 'css')
-                if css_name:
-                    link['href'] = css_name
-
-        # Save JS files
-        for script in soup.find_all('script', src=True):
-            js_url = script.get('src')
-            if js_url:
-                js_name = save_resource(js_url, page_dir, 'script', 'js')
-                if js_name:
-                    script['src'] = js_name
-
-        # Save videos
+    def _save_videos(self, soup, page_dir, base_url):
         for video in soup.find_all('video'):
             for source in video.find_all('source'):
-                video_url = source.get('src')
-                if video_url:
-                    video_name = save_resource(video_url, page_dir, 'video', 'mp4')
-                    if video_name:
-                        source['src'] = video_name
+                src = source.get('src')
+                if src:
+                    full_url = urljoin(base_url, src)
+                    name = self._save_resource(full_url, page_dir, 'video', _get_extension(full_url, 'mp4'))
+                    if name:
+                        source['src'] = name
 
-    def _update_links(self, soup, url, queue, visited, clean_title):
-        """Update and queue links found on the page."""
+    def _save_css_and_js(self, soup, page_dir, base_url):
+        for link in soup.find_all('link', rel='stylesheet'):
+            href = link.get('href')
+            if href:
+                full_url = urljoin(base_url, href)
+                name = self._save_resource(full_url, page_dir, 'style', 'css')
+                if name:
+                    link['href'] = name
+
+        for script in soup.find_all('script', src=True):
+            src = script.get('src')
+            if src:
+                full_url = urljoin(base_url, src)
+                name = self._save_resource(full_url, page_dir, 'script', 'js')
+                if name:
+                    script['src'] = name
+
+    def _update_links(self, soup, url, queue, visited, clean_title, depth):
+        """Enqueue unvisited same-domain links and rewrite hrefs to local paths."""
         for a in soup.find_all('a', href=True):
             link_url = urljoin(url, a['href'])
             if link_url not in visited and is_valid_url(link_url):
-                queue.append(link_url)
+                if depth + 1 <= self.max_depth:
+                    queue.append((link_url, depth + 1))
                 visited.add(link_url)
 
-            # Update href to local path if within same domain
             if urlsplit(link_url).netloc == urlsplit(url).netloc:
-                a['href'] = os.path.join('..', clean_title, hashlib.md5(link_url.encode()).hexdigest() + '.html')
+                local = os.path.join('..', clean_title, hashlib.md5(link_url.encode()).hexdigest() + '.html')
+                a['href'] = local
