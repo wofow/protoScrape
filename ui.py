@@ -61,13 +61,12 @@ class ScraperWorker(QThread):
 class ScraperUI(QMainWindow):
     def __init__(self):
         super().__init__()
-<<<<<<< HEAD
         self.setWindowTitle("protoScrape")
         self.setGeometry(100, 100, 680, 520)
-=======
+
         self.setWindowTitle("ProtoScrape")
         self.setGeometry(100, 100, 600, 400)
->>>>>>> fc204be3940d157e56ed5fd60118c54a639afd02
+
 
         self._worker = None
 
@@ -82,7 +81,6 @@ class ScraperUI(QMainWindow):
         self.url_input.setPlaceholderText("https://example.com, https://other.com")
         layout.addWidget(self.url_input)
 
-<<<<<<< HEAD
         # --- Output directory ---
         dir_row = QHBoxLayout()
         self.dir_label = QLabel("No output directory selected")
@@ -113,7 +111,6 @@ class ScraperUI(QMainWindow):
         options_row.addWidget(self.depth_spin)
         options_row.addStretch()
         layout.addLayout(options_row)
-=======
         # Scan URLs button
         self.scan_button = QPushButton("Scan URLs")
         self.scan_button.clicked.connect(self.scan_urls)
@@ -131,7 +128,6 @@ class ScraperUI(QMainWindow):
         self.option_dropdown = QComboBox()
         self.layout.addWidget(self.option_label)
         self.layout.addWidget(self.option_dropdown)
->>>>>>> fc204be3940d157e56ed5fd60118c54a639afd02
 
         # --- Action buttons ---
         btn_row = QHBoxLayout()
@@ -157,24 +153,19 @@ class ScraperUI(QMainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if directory:
             self.output_dir = directory
-<<<<<<< HEAD
             self.dir_label.setText(f"Output: {directory}")
-=======
             self.dir_label.setText(f"Output Directory: {directory}")
 
     def scan_urls(self):
         """Pre-scan the URLs to determine available scraping options."""
         urls = self.url_input.text().split(',')
         urls = [url.strip() for url in urls if url.strip()]
->>>>>>> fc204be3940d157e56ed5fd60118c54a639afd02
 
     def _start_scraping(self):
         urls = [u.strip() for u in self.url_input.text().split(',') if u.strip()]
         if not urls:
             QMessageBox.warning(self, "Input Error", "Please enter at least one URL.")
             return
-<<<<<<< HEAD
-=======
 
         self.log_area.append("Scanning URLs...")
         try:
@@ -202,12 +193,10 @@ class ScraperUI(QMainWindow):
         urls = self.url_input.text().split(',')
         urls = [url.strip() for url in urls if url.strip()]
 
->>>>>>> fc204be3940d157e56ed5fd60118c54a639afd02
         if not self.output_dir:
             QMessageBox.warning(self, "Directory Error", "Please select an output directory.")
             return
 
-<<<<<<< HEAD
         self.log_area.clear()
         self.log_area.append("Starting scrape…\n")
         self.start_btn.setEnabled(False)
@@ -222,13 +211,11 @@ class ScraperUI(QMainWindow):
         self._worker.log_message.connect(self.log_area.append)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
-=======
         self.log_area.append(f"Starting scraping process for: {selected_option}")
         try:
             queue = deque(urls)
             visited = set(urls)
             page_fetcher = PageFetcher(self.output_dir)
->>>>>>> fc204be3940d157e56ed5fd60118c54a639afd02
 
     def _stop_scraping(self):
         if self._worker:
