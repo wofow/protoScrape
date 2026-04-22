@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
 )
 
 from ops.fetch import PageFetcher
-from ops.scanner import PreScan  # Import PreScan class
 
 
 # ---------------------------------------------------------------------------
@@ -64,10 +63,6 @@ class ScraperUI(QMainWindow):
         self.setWindowTitle("protoScrape")
         self.setGeometry(100, 100, 680, 520)
 
-        self.setWindowTitle("ProtoScrape")
-        self.setGeometry(100, 100, 600, 400)
-
-
         self._worker = None
 
         central = QWidget()
@@ -111,23 +106,6 @@ class ScraperUI(QMainWindow):
         options_row.addWidget(self.depth_spin)
         options_row.addStretch()
         layout.addLayout(options_row)
-        # Scan URLs button
-        self.scan_button = QPushButton("Scan URLs")
-        self.scan_button.clicked.connect(self.scan_urls)
-        self.layout.addWidget(self.scan_button)
-
-        # Output directory selection
-        self.dir_label = QLabel("Output Directory: Not Selected")
-        self.dir_button = QPushButton("Select Output Directory")
-        self.dir_button.clicked.connect(self.select_directory)
-        self.layout.addWidget(self.dir_label)
-        self.layout.addWidget(self.dir_button)
-
-        # Available scraping options dropdown
-        self.option_label = QLabel("Scraping Options:")
-        self.option_dropdown = QComboBox()
-        self.layout.addWidget(self.option_label)
-        self.layout.addWidget(self.option_dropdown)
 
         # --- Action buttons ---
         btn_row = QHBoxLayout()
@@ -147,52 +125,18 @@ class ScraperUI(QMainWindow):
         layout.addWidget(self.log_area)
 
         self.output_dir = None
-        self.scanned_data = {}  # Store the results of the pre-scan
 
     def _select_directory(self):
         directory = QFileDialog.getExistingDirectory(self, "Select Output Directory")
         if directory:
             self.output_dir = directory
             self.dir_label.setText(f"Output: {directory}")
-            self.dir_label.setText(f"Output Directory: {directory}")
-
-    def scan_urls(self):
-        """Pre-scan the URLs to determine available scraping options."""
-        urls = self.url_input.text().split(',')
-        urls = [url.strip() for url in urls if url.strip()]
 
     def _start_scraping(self):
         urls = [u.strip() for u in self.url_input.text().split(',') if u.strip()]
         if not urls:
             QMessageBox.warning(self, "Input Error", "Please enter at least one URL.")
             return
-
-        self.log_area.append("Scanning URLs...")
-        try:
-            # Run the PreScan logic
-            pre_scan = PreScan(urls)
-            self.scanned_data = pre_scan.run_scan()
-
-            # Populate the dropdown menu with options
-            self.option_dropdown.clear()
-            for url, options in self.scanned_data.items():
-                self.option_dropdown.addItem(f"{url} - {', '.join(options)}")
-
-            self.log_area.append("URL scanning completed.")
-        except Exception as e:
-            self.log_area.append(f"Error during scan: {e}")
-            QMessageBox.critical(self, "Scan Error", f"An error occurred: {e}")
-
-    def start_scraping(self):
-        """Start the scraping process."""
-        selected_option = self.option_dropdown.currentText()
-        if not selected_option:
-            QMessageBox.warning(self, "Selection Error", "Please select a scraping option.")
-            return
-
-        urls = self.url_input.text().split(',')
-        urls = [url.strip() for url in urls if url.strip()]
-
         if not self.output_dir:
             QMessageBox.warning(self, "Directory Error", "Please select an output directory.")
             return
@@ -211,11 +155,6 @@ class ScraperUI(QMainWindow):
         self._worker.log_message.connect(self.log_area.append)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
-        self.log_area.append(f"Starting scraping process for: {selected_option}")
-        try:
-            queue = deque(urls)
-            visited = set(urls)
-            page_fetcher = PageFetcher(self.output_dir)
 
     def _stop_scraping(self):
         if self._worker:
