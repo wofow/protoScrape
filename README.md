@@ -1,4 +1,4 @@
-# protoScrape
+# protoScrape(WIP)
 Web scraper with PyQt5 UI.
 
 ## Features
