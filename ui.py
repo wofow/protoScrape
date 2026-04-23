@@ -39,7 +39,7 @@ class ScraperWorker(QThread):
         visited = set(self.urls)
 
         while queue:
-            if self._fetcher._stop_flag:
+            if self._fetcher.is_stopped:
                 self.log_message.emit("⏹ Scraping stopped by user.")
                 break
             url, depth = queue.popleft()

@@ -27,6 +27,10 @@ class PageFetcher:
     def stop(self):
         self._stop_flag = True
 
+    @property
+    def is_stopped(self):
+        return self._stop_flag
+
     def _log(self, message):
         if self.progress_callback:
             self.progress_callback(message)
@@ -42,7 +46,7 @@ class PageFetcher:
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            title = soup.title.string if soup.title else hashlib.md5(url.encode()).hexdigest()
+            title = (soup.title.string if soup.title else None) or hashlib.md5(url.encode()).hexdigest()
             clean_title = ''.join(e for e in title if e.isalnum() or e in (' ', '_', '-')).strip()[:80]
             page_dir = os.path.join(self.base_dir, clean_title)
             os.makedirs(page_dir, exist_ok=True)
@@ -89,7 +93,7 @@ class PageFetcher:
         for img in soup.find_all('img'):
             src = img.get('src')
             if src:
-                full_url = urljoin(base_url, src)
+                full_url = urljoin(base_url, str(src))
                 name = self._save_resource(full_url, page_dir, 'image', _get_extension(full_url, 'jpg'))
                 if name:
                     img['src'] = name
@@ -99,7 +103,7 @@ class PageFetcher:
             for source in video.find_all('source'):
                 src = source.get('src')
                 if src:
-                    full_url = urljoin(base_url, src)
+                    full_url = urljoin(base_url, str(src))
                     name = self._save_resource(full_url, page_dir, 'video', _get_extension(full_url, 'mp4'))
                     if name:
                         source['src'] = name
@@ -108,7 +112,7 @@ class PageFetcher:
         for link in soup.find_all('link', rel='stylesheet'):
             href = link.get('href')
             if href:
-                full_url = urljoin(base_url, href)
+                full_url = urljoin(base_url, str(href))
                 name = self._save_resource(full_url, page_dir, 'style', 'css')
                 if name:
                     link['href'] = name
@@ -116,7 +120,7 @@ class PageFetcher:
         for script in soup.find_all('script', src=True):
             src = script.get('src')
             if src:
-                full_url = urljoin(base_url, src)
+                full_url = urljoin(base_url, str(src))
                 name = self._save_resource(full_url, page_dir, 'script', 'js')
                 if name:
                     script['src'] = name
@@ -124,7 +128,7 @@ class PageFetcher:
     def _update_links(self, soup, url, queue, visited, clean_title, depth):
         """Enqueue unvisited same-domain links and rewrite hrefs to local paths."""
         for a in soup.find_all('a', href=True):
-            link_url = urljoin(url, a['href'])
+            link_url = urljoin(url, str(a['href']))
             if link_url not in visited and is_valid_url(link_url):
                 if depth + 1 <= self.max_depth:
                     queue.append((link_url, depth + 1))
